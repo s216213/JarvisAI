@@ -1,0 +1,5 @@
+# Single-package app; settings live here (pnpm 12+).
+allowBuilds:
+  unrs-resolver: true
+  sharp: true
+  "@tailwindcss/oxide": true

@@ -1,0 +1,66 @@
+name: Deploy Brain
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/brain/**"
+      - "packages/protocol/**"
+      - "docker-compose.yml"
+      - "deploy/caddy/**"
+      - ".github/workflows/deploy-brain.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  IMAGE_NAME: jarvis-brain
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set image tags
+        id: meta
+        run: |
+          OWNER=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')
+          SHA_TAG="ghcr.io/${OWNER}/${IMAGE_NAME}:${{ github.sha }}"
+          LATEST_TAG="ghcr.io/${OWNER}/${IMAGE_NAME}:latest"
+          echo "sha_tag=${SHA_TAG}" >> "$GITHUB_OUTPUT"
+          echo "latest_tag=${LATEST_TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: ./apps/brain
+          file: ./apps/brain/Dockerfile
+          push: true
+          tags: |
+            ${{ steps.meta.outputs.sha_tag }}
+            ${{ steps.meta.outputs.latest_tag }}
+
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.OCI_HOST }}
+          username: ${{ secrets.OCI_USER }}
+          key: ${{ secrets.OCI_SSH_KEY }}
+          script: |
+            set -euo pipefail
+            cd ~/jarvis
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            export BRAIN_IMAGE='${{ steps.meta.outputs.sha_tag }}'
+            docker compose pull brain
+            docker compose up -d brain caddy postgres
+            docker image prune -f

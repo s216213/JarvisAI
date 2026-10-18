@@ -1,0 +1,4 @@
+{$JARVIS_DOMAIN:localhost} {
+	encode gzip
+	reverse_proxy brain:8080
+}

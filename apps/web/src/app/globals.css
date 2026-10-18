@@ -1,0 +1,93 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #0c0e12;
+  --bg-elevated: #141820;
+  --bg-panel: #10141c;
+  --line: #243044;
+  --text: #e8edf5;
+  --muted: #8b97a8;
+  --accent: #d4a017;
+  --accent-dim: #9a7510;
+  --danger: #c45c4a;
+  --ok: #3d9b7a;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background:
+    radial-gradient(1200px 600px at 10% -10%, rgba(212, 160, 23, 0.12), transparent 55%),
+    radial-gradient(900px 500px at 100% 0%, rgba(50, 80, 120, 0.18), transparent 50%),
+    var(--bg);
+  color: var(--text);
+  font-family: var(--font-body), system-ui, sans-serif;
+}
+
+h1,
+h2,
+h3,
+.brand {
+  font-family: var(--font-display), system-ui, sans-serif;
+  letter-spacing: 0.04em;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+.panel {
+  background: color-mix(in srgb, var(--bg-panel) 92%, transparent);
+  border: 1px solid var(--line);
+  backdrop-filter: blur(8px);
+}
+
+.btn {
+  border: 1px solid var(--accent-dim);
+  background: linear-gradient(180deg, #c49214, #8f6a0d);
+  color: #120e05;
+  padding: 0.55rem 1rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn:hover {
+  filter: brightness(1.08);
+}
+
+.btn-ghost {
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--text);
+  padding: 0.55rem 1rem;
+  cursor: pointer;
+}
+
+.input {
+  width: 100%;
+  border: 1px solid var(--line);
+  background: #0a0d12;
+  color: var(--text);
+  padding: 0.65rem 0.75rem;
+}
+
+.input:focus {
+  outline: 1px solid var(--accent);
+  border-color: var(--accent);
+}

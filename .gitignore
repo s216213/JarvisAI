@@ -1,0 +1,37 @@
+# Rust
+apps/brain/target/
+**/*.rs.bk
+
+# Node / Next.js / pnpm
+node_modules/
+apps/web/.next/
+apps/web/out/
+apps/web/node_modules/
+apps/web/package-lock.json
+packages/protocol/ts/node_modules/
+.pnpm-store/
+*.tsbuildinfo
+next-env.d.ts
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+apps/brain/.env
+apps/web/.env.local
+deploy/*.env
+!**/.env.example
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Logs / local data
+*.log
+pgdata/
+.vercel/
+dist/
+build/

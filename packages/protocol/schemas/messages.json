@@ -1,0 +1,110 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jarvis.local/protocol/messages.json",
+  "title": "JarvisProtocolMessages",
+  "oneOf": [
+    { "$ref": "#/$defs/ChatUserMessage" },
+    { "$ref": "#/$defs/ChatAssistantDelta" },
+    { "$ref": "#/$defs/ChatAssistantDone" },
+    { "$ref": "#/$defs/ToolInvoke" },
+    { "$ref": "#/$defs/ToolResult" },
+    { "$ref": "#/$defs/DeviceHello" },
+    { "$ref": "#/$defs/DeviceHeartbeat" },
+    { "$ref": "#/$defs/ErrorEvent" },
+    { "$ref": "#/$defs/ProvidersExhausted" }
+  ],
+  "$defs": {
+    "ChatUserMessage": {
+      "type": "object",
+      "required": ["type", "thread_id", "content"],
+      "properties": {
+        "type": { "const": "chat.user" },
+        "thread_id": { "type": "string", "format": "uuid" },
+        "content": { "type": "string", "minLength": 1 }
+      }
+    },
+    "ChatAssistantDelta": {
+      "type": "object",
+      "required": ["type", "thread_id", "delta"],
+      "properties": {
+        "type": { "const": "chat.assistant.delta" },
+        "thread_id": { "type": "string", "format": "uuid" },
+        "delta": { "type": "string" },
+        "provider": { "type": "string" }
+      }
+    },
+    "ChatAssistantDone": {
+      "type": "object",
+      "required": ["type", "thread_id", "message_id"],
+      "properties": {
+        "type": { "const": "chat.assistant.done" },
+        "thread_id": { "type": "string", "format": "uuid" },
+        "message_id": { "type": "string", "format": "uuid" },
+        "provider": { "type": "string" }
+      }
+    },
+    "ToolInvoke": {
+      "type": "object",
+      "required": ["type", "invoke_id", "tool", "args"],
+      "properties": {
+        "type": { "const": "tool.invoke" },
+        "invoke_id": { "type": "string", "format": "uuid" },
+        "tool": { "type": "string" },
+        "args": { "type": "object" },
+        "device_id": { "type": "string" },
+        "trust": { "enum": ["safe", "confirm", "superadmin_only"] }
+      }
+    },
+    "ToolResult": {
+      "type": "object",
+      "required": ["type", "invoke_id", "ok"],
+      "properties": {
+        "type": { "const": "tool.result" },
+        "invoke_id": { "type": "string", "format": "uuid" },
+        "ok": { "type": "boolean" },
+        "result": {},
+        "error": { "type": "string" }
+      }
+    },
+    "DeviceHello": {
+      "type": "object",
+      "required": ["type", "device_id", "platform", "capabilities"],
+      "properties": {
+        "type": { "const": "device.hello" },
+        "device_id": { "type": "string" },
+        "platform": { "enum": ["web", "windows", "android"] },
+        "capabilities": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "label": { "type": "string" }
+      }
+    },
+    "DeviceHeartbeat": {
+      "type": "object",
+      "required": ["type", "device_id"],
+      "properties": {
+        "type": { "const": "device.heartbeat" },
+        "device_id": { "type": "string" }
+      }
+    },
+    "ErrorEvent": {
+      "type": "object",
+      "required": ["type", "code", "message"],
+      "properties": {
+        "type": { "const": "error" },
+        "code": { "type": "string" },
+        "message": { "type": "string" }
+      }
+    },
+    "ProvidersExhausted": {
+      "type": "object",
+      "required": ["type", "retry_after_secs", "message"],
+      "properties": {
+        "type": { "const": "llm.providers_exhausted" },
+        "retry_after_secs": { "type": "integer", "minimum": 0 },
+        "message": { "type": "string" }
+      }
+    }
+  }
+}
