@@ -33,6 +33,12 @@ Caddy runs **on the VM host** (`/etc/caddy/Caddyfile`). Docker only runs `postgr
 
 - `OCI_HOST`, `OCI_USER`, `OCI_SSH_KEY`
 
+## Architecture
+
+OCI Ampere (A1) is **arm64**. The deploy workflow builds `linux/arm64` by default.
+Confirm on the VM with `uname -m` (`aarch64` = arm64, `x86_64` = amd64).
+If the shape is x86_64, set repo variable `BRAIN_PLATFORM=linux/amd64`.
+
 ## Local check on VM
 
 ```bash
