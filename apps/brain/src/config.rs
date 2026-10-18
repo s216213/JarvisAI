@@ -19,8 +19,9 @@ pub struct Config {
 impl Config {
     pub fn from_env() -> anyhow::Result<Self> {
         Ok(Self {
+            // Local default: file SQLite. Production/OCI: postgres://...
             database_url: env::var("DATABASE_URL")
-                .unwrap_or_else(|_| "postgres://jarvis:jarvis@localhost:5432/jarvis".into()),
+                .unwrap_or_else(|_| "sqlite:./data/jarvis.db".into()),
             jwt_secret: env::var("JWT_SECRET").unwrap_or_else(|_| "dev-change-me-jarvis-secret".into()),
             listen_addr: env::var("LISTEN_ADDR").unwrap_or_else(|_| "0.0.0.0:8080".into()),
             cors_origins: env::var("CORS_ORIGINS")

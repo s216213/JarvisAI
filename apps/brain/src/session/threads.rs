@@ -67,18 +67,27 @@ async fn create_thread(
     let title = body
         .title
         .unwrap_or_else(|| "New chat".to_string());
-    let row = sqlx::query_as::<_, ThreadRow>(
+    let id = Uuid::new_v4();
+    let now = chrono::Utc::now();
+    sqlx::query(
         r#"
-        INSERT INTO threads (user_id, title)
-        VALUES ($1, $2)
-        RETURNING id, title, created_at, updated_at
+        INSERT INTO threads (id, user_id, title, created_at, updated_at)
+        VALUES ($1, $2, $3, $4, $4)
         "#,
     )
+    .bind(id)
     .bind(user.id)
-    .bind(title)
-    .fetch_one(&state.pool)
+    .bind(&title)
+    .bind(now)
+    .execute(&state.pool)
     .await?;
-    Ok(Json(row))
+
+    Ok(Json(ThreadRow {
+        id,
+        title,
+        created_at: now,
+        updated_at: now,
+    }))
 }
 
 async fn list_messages(
@@ -99,7 +108,7 @@ async fn list_messages(
 
     let rows = sqlx::query_as::<_, MessageRow>(
         r#"
-        SELECT id, thread_id, role::text as role, content, provider, created_at
+        SELECT id, thread_id, role, content, provider, created_at
         FROM messages WHERE thread_id = $1
         ORDER BY created_at ASC
         "#,

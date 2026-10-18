@@ -2,12 +2,12 @@ use std::sync::Arc;
 
 use dashmap::DashMap;
 use reqwest::Client;
-use sqlx::PgPool;
 use tokio::sync::broadcast;
 use uuid::Uuid;
 
 use crate::{
     config::Config,
+    db::DbPool,
     devices::registry::DeviceRegistry,
     llm::quota::QuotaGuardian,
     rate_limit::RateLimiter,
@@ -15,7 +15,7 @@ use crate::{
 
 #[derive(Clone)]
 pub struct AppState {
-    pub pool: PgPool,
+    pub pool: DbPool,
     pub config: Arc<Config>,
     pub http: Client,
     pub quota: Arc<QuotaGuardian>,
@@ -25,7 +25,7 @@ pub struct AppState {
 }
 
 impl AppState {
-    pub fn new(pool: PgPool, config: Config) -> Self {
+    pub fn new(pool: DbPool, config: Config) -> Self {
         Self {
             pool,
             config: Arc::new(config),

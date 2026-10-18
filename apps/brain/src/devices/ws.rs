@@ -97,22 +97,25 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Uuid) {
                         last_seen: Utc::now(),
                     };
 
+                    let now = Utc::now();
+                    let caps_json = serde_json::json!(capabilities);
                     let _ = sqlx::query(
                         r#"
                         INSERT INTO devices (device_id, user_id, platform, label, capabilities, last_seen)
-                        VALUES ($1, $2, $3::platform_kind, $4, $5, now())
+                        VALUES ($1, $2, $3, $4, $5, $6)
                         ON CONFLICT (device_id) DO UPDATE SET
                             platform = EXCLUDED.platform,
                             label = EXCLUDED.label,
                             capabilities = EXCLUDED.capabilities,
-                            last_seen = now()
+                            last_seen = EXCLUDED.last_seen
                         "#,
                     )
                     .bind(&id)
                     .bind(user_id)
                     .bind(&platform)
                     .bind(&label)
-                    .bind(&capabilities)
+                    .bind(&caps_json)
+                    .bind(now)
                     .execute(&state_clone.pool)
                     .await;
 
@@ -127,8 +130,9 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Uuid) {
                 "device.heartbeat" => {
                     if let Some(id) = value.get("device_id").and_then(|v| v.as_str()) {
                         state_clone.devices.heartbeat(id);
-                        let _ = sqlx::query("UPDATE devices SET last_seen = now() WHERE device_id = $1")
+                        let _ = sqlx::query("UPDATE devices SET last_seen = $2 WHERE device_id = $1")
                             .bind(id)
+                            .bind(Utc::now())
                             .execute(&state_clone.pool)
                             .await;
                     }

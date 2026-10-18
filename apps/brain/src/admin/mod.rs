@@ -67,7 +67,7 @@ async fn list_users(
 ) -> AppResult<Json<Vec<UserAdminRow>>> {
     let rows = sqlx::query_as::<_, UserAdminRow>(
         r#"
-        SELECT id, email, role::text as role, display_name, created_at
+        SELECT id, email, role, display_name, created_at
         FROM users ORDER BY created_at ASC
         "#,
     )
@@ -94,24 +94,26 @@ async fn create_invite(
     let token_hash = hash_token(&token);
     let expires_at = Utc::now() + Duration::hours(hours);
 
-    let id: Uuid = sqlx::query_scalar(
+    let id = Uuid::new_v4();
+    sqlx::query(
         r#"
-        INSERT INTO invites (email, token_hash, role, created_by, expires_at)
-        VALUES ($1, $2, $3::user_role, $4, $5)
-        RETURNING id
+        INSERT INTO invites (id, email, token_hash, role, created_by, expires_at)
+        VALUES ($1, $2, $3, $4, $5, $6)
         "#,
     )
+    .bind(id)
     .bind(body.email.to_lowercase())
     .bind(&token_hash)
     .bind(&role)
     .bind(admin.0.id)
     .bind(expires_at)
-    .fetch_one(&state.pool)
+    .execute(&state.pool)
     .await?;
 
     sqlx::query(
-        r#"INSERT INTO audit_logs (user_id, action, detail) VALUES ($1, 'invite.create', $2)"#,
+        r#"INSERT INTO audit_logs (id, user_id, action, detail) VALUES ($1, $2, 'invite.create', $3)"#,
     )
+    .bind(Uuid::new_v4())
     .bind(admin.0.id)
     .bind(serde_json::json!({ "invite_id": id, "email": body.email, "role": role }))
     .execute(&state.pool)
@@ -180,9 +182,9 @@ async fn list_devices_admin(
 ) -> AppResult<Json<serde_json::Value>> {
     // Superadmin sees their own live devices + DB snapshot
     let live = state.devices.list_for_user(admin.0.id);
-    let db = sqlx::query_as::<_, (String, String, Option<String>, Vec<String>, chrono::DateTime<chrono::Utc>)>(
+    let db = sqlx::query_as::<_, (String, String, Option<String>, serde_json::Value, chrono::DateTime<chrono::Utc>)>(
         r#"
-        SELECT device_id, platform::text, label, capabilities, last_seen
+        SELECT device_id, platform, label, capabilities, last_seen
         FROM devices
         ORDER BY last_seen DESC
         LIMIT 100

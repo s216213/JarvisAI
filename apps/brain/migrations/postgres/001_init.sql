@@ -1,14 +1,10 @@
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
-CREATE TYPE user_role AS ENUM ('superadmin', 'user');
-CREATE TYPE message_role AS ENUM ('user', 'assistant', 'system', 'tool');
-CREATE TYPE platform_kind AS ENUM ('web', 'windows', 'android');
-
 CREATE TABLE users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     email TEXT NOT NULL UNIQUE,
     password_hash TEXT NOT NULL,
-    role user_role NOT NULL DEFAULT 'user',
+    role TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('superadmin', 'user')),
     display_name TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -18,7 +14,7 @@ CREATE TABLE invites (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     email TEXT NOT NULL,
     token_hash TEXT NOT NULL UNIQUE,
-    role user_role NOT NULL DEFAULT 'user',
+    role TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('superadmin', 'user')),
     created_by UUID REFERENCES users(id) ON DELETE SET NULL,
     expires_at TIMESTAMPTZ NOT NULL,
     accepted_at TIMESTAMPTZ,
@@ -45,7 +41,7 @@ CREATE TABLE threads (
 CREATE TABLE messages (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     thread_id UUID NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
-    role message_role NOT NULL,
+    role TEXT NOT NULL CHECK (role IN ('user', 'assistant', 'system', 'tool')),
     content TEXT NOT NULL,
     provider TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -106,9 +102,9 @@ CREATE TABLE audit_logs (
 CREATE TABLE devices (
     device_id TEXT PRIMARY KEY,
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    platform platform_kind NOT NULL,
+    platform TEXT NOT NULL CHECK (platform IN ('web', 'windows', 'android')),
     label TEXT,
-    capabilities TEXT[] NOT NULL DEFAULT '{}',
+    capabilities JSONB NOT NULL DEFAULT '[]'::jsonb,
     last_seen TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 

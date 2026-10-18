@@ -114,14 +114,16 @@ async fn handle_chat(socket: WebSocket, state: AppState, user_id: Uuid) {
         .await
         {
             let cap_n = cap.as_i64().unwrap_or(200);
+            let since = chrono::Utc::now() - chrono::Duration::days(1);
             let used: i64 = sqlx::query_scalar(
                 r#"
                 SELECT COUNT(*) FROM messages m
                 JOIN threads t ON t.id = m.thread_id
-                WHERE t.user_id = $1 AND m.role = 'assistant' AND m.created_at > now() - interval '1 day'
+                WHERE t.user_id = $1 AND m.role = 'assistant' AND m.created_at > $2
                 "#,
             )
             .bind(user_id)
+            .bind(since)
             .fetch_one(&state.pool)
             .await
             .unwrap_or(0);
@@ -141,19 +143,26 @@ async fn handle_chat(socket: WebSocket, state: AppState, user_id: Uuid) {
             }
         }
 
+        let now = chrono::Utc::now();
         let _ = sqlx::query(
-            r#"INSERT INTO messages (thread_id, role, content) VALUES ($1, 'user', $2)"#,
+            r#"INSERT INTO messages (id, thread_id, role, content, created_at) VALUES ($1, $2, 'user', $3, $4)"#,
         )
+        .bind(Uuid::new_v4())
         .bind(thread_id)
         .bind(&content)
+        .bind(now)
         .execute(&state.pool)
         .await;
 
-        let _ = sqlx::query("UPDATE threads SET updated_at = now(), title = CASE WHEN title = 'New chat' THEN left($2, 60) ELSE title END WHERE id = $1")
-            .bind(thread_id)
-            .bind(&content)
-            .execute(&state.pool)
-            .await;
+        let title_snip: String = content.chars().take(60).collect();
+        let _ = sqlx::query(
+            "UPDATE threads SET updated_at = $3, title = CASE WHEN title = 'New chat' THEN $2 ELSE title END WHERE id = $1",
+        )
+        .bind(thread_id)
+        .bind(&title_snip)
+        .bind(now)
+        .execute(&state.pool)
+        .await;
 
         // Tool shortcut
         if let Some((tool, args)) = maybe_route_tool(&content) {
@@ -186,7 +195,7 @@ async fn handle_chat(socket: WebSocket, state: AppState, user_id: Uuid) {
 
         let history = sqlx::query_as::<_, (String, String)>(
             r#"
-            SELECT role::text, content FROM messages
+            SELECT role, content FROM messages
             WHERE thread_id = $1
             ORDER BY created_at DESC
             LIMIT 20
@@ -250,19 +259,21 @@ async fn persist_assistant(
     content: &str,
     provider: Option<&str>,
 ) -> Uuid {
-    sqlx::query_scalar(
+    let id = Uuid::new_v4();
+    let _ = sqlx::query(
         r#"
-        INSERT INTO messages (thread_id, role, content, provider)
-        VALUES ($1, 'assistant', $2, $3)
-        RETURNING id
+        INSERT INTO messages (id, thread_id, role, content, provider, created_at)
+        VALUES ($1, $2, 'assistant', $3, $4, $5)
         "#,
     )
+    .bind(id)
     .bind(thread_id)
     .bind(content)
     .bind(provider)
-    .fetch_one(&state.pool)
-    .await
-    .unwrap_or_else(|_| Uuid::new_v4())
+    .bind(chrono::Utc::now())
+    .execute(&state.pool)
+    .await;
+    id
 }
 
 async fn stream_text(

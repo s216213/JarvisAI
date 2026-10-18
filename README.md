@@ -6,7 +6,7 @@ Personal Iron Man–style agent: Rust brain on Oracle Cloud, Next.js admin/chat 
 
 | Path | Role | Deploy |
 |------|------|--------|
-| `apps/brain` | Rust Axum orchestrator (edition 2024, MSRV 1.94) | Docker + GitHub Actions → OCI VM |
+| `apps/brain` | Rust Axum orchestrator (edition 2024; local SQLite, OCI Postgres) | Docker + GitHub Actions → OCI VM |
 | `apps/web` | Next.js 16 UI + BFF | Vercel (`rootDirectory=apps/web`) |
 | `packages/protocol` | Shared JSON Schema + TS types | consumed by web |
 | `clients/*` | Desktop / Android (later) | — |
@@ -16,10 +16,10 @@ Personal Iron Man–style agent: Rust brain on Oracle Cloud, Next.js admin/chat 
 ### Brain
 
 ```bash
-# Postgres (Docker) or any Postgres 16
 cd apps/brain
 cp .env.example .env
-# set DATABASE_URL, JWT_SECRET, optional LLM keys, bootstrap superadmin
+# Local default: DATABASE_URL=sqlite:./data/jarvis.db (file DB, no Postgres)
+# OCI/prod: DATABASE_URL=postgres://...
 cargo run
 ```
 
@@ -45,10 +45,10 @@ pnpm dev
 
 ## OCI deploy
 
-1. Copy `docker-compose.yml` + brain `.env` to `~/jarvis` on the VM (Docker: `postgres` + `brain` only).
-2. Use **host Caddy**: copy `deploy/caddy/Caddyfile` → `/etc/caddy/Caddyfile`, set your domain, `systemctl reload caddy`.
+1. On the VM create `~/jarvis/.env` (from `apps/brain/.env.example`).
+2. Host Caddy: `deploy/caddy/Caddyfile` → `/etc/caddy/Caddyfile`, set domain, `systemctl reload caddy`.
 3. GitHub secrets: `OCI_HOST`, `OCI_USER`, `OCI_SSH_KEY`.
-4. Push to `main` under `apps/brain/**` → GHCR build + `docker compose up -d postgres brain`.
+4. Push / run **Deploy Brain** — Actions syncs `docker-compose.yml` and runs `docker compose up -d postgres brain`.
 
 See [deploy/README.md](deploy/README.md).
 

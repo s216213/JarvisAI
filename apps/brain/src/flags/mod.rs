@@ -49,26 +49,37 @@ async fn update_flag(
     Path(key): Path<String>,
     Json(body): Json<UpdateFlag>,
 ) -> AppResult<Json<FeatureFlag>> {
-    let row = sqlx::query_as::<_, FeatureFlag>(
+    let now = chrono::Utc::now();
+    let res = sqlx::query(
         r#"
         UPDATE feature_flags SET
             enabled = COALESCE($2, enabled),
             value = COALESCE($3, value),
-            updated_at = now()
+            updated_at = $4
         WHERE key = $1
-        RETURNING key, enabled, value
         "#,
     )
     .bind(&key)
     .bind(body.enabled)
     .bind(&body.value)
-    .fetch_optional(&state.pool)
-    .await?
-    .ok_or_else(|| AppError::NotFound("flag".into()))?;
+    .bind(now)
+    .execute(&state.pool)
+    .await?;
+    if res.rows_affected() == 0 {
+        return Err(AppError::NotFound("flag".into()));
+    }
+
+    let row = sqlx::query_as::<_, FeatureFlag>(
+        "SELECT key, enabled, value FROM feature_flags WHERE key = $1",
+    )
+    .bind(&key)
+    .fetch_one(&state.pool)
+    .await?;
 
     sqlx::query(
-        r#"INSERT INTO audit_logs (user_id, action, detail) VALUES ($1, 'flag.update', $2)"#,
+        r#"INSERT INTO audit_logs (id, user_id, action, detail) VALUES ($1, $2, 'flag.update', $3)"#,
     )
+    .bind(uuid::Uuid::new_v4())
     .bind(admin.0.id)
     .bind(serde_json::json!({ "key": key, "enabled": row.enabled, "value": row.value }))
     .execute(&state.pool)

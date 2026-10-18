@@ -5,7 +5,7 @@ WORKDIR /app
 COPY Cargo.toml Cargo.lock* ./
 COPY src ./src
 COPY migrations ./migrations
-RUN cargo build --release
+RUN cargo build --release --no-default-features --features db-postgres
 
 FROM debian:bookworm-slim
 RUN apt-get update \
@@ -13,7 +13,7 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=builder /app/target/release/jarvis-brain /usr/local/bin/jarvis-brain
-COPY migrations ./migrations
+COPY migrations/postgres ./migrations/postgres
 ENV LISTEN_ADDR=0.0.0.0:8080
 EXPOSE 8080
 CMD ["jarvis-brain"]

@@ -53,14 +53,18 @@ pub async fn execute_local_tool(
                 .ok_or_else(|| AppError::BadRequest("value required".into()))?;
             sqlx::query(
                 r#"
-                INSERT INTO user_facts (user_id, key, value)
-                VALUES ($1, $2, $3)
-                ON CONFLICT (user_id, key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()
+                INSERT INTO user_facts (id, user_id, key, value, updated_at)
+                VALUES ($1, $2, $3, $4, $5)
+                ON CONFLICT (user_id, key) DO UPDATE SET
+                    value = EXCLUDED.value,
+                    updated_at = EXCLUDED.updated_at
                 "#,
             )
+            .bind(Uuid::new_v4())
             .bind(user_id)
             .bind(key)
             .bind(value)
+            .bind(chrono::Utc::now())
             .execute(&state.pool)
             .await?;
             Ok(json!({ "ok": true, "key": key }))

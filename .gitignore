@@ -1,6 +1,9 @@
 # Rust
 apps/brain/target/
+apps/brain/data/
 **/*.rs.bk
+**/*.db
+**/*.db-*
 
 # Node / Next.js / pnpm
 node_modules/

@@ -83,23 +83,37 @@ async fn create_version(
             .await?;
     }
 
-    let row = sqlx::query_as::<_, PersonaVersion>(
+    let id = Uuid::new_v4();
+    let now = chrono::Utc::now();
+    sqlx::query(
         r#"
-        INSERT INTO persona_versions (label, system_prompt, created_by, is_active)
-        VALUES ($1, $2, $3, $4)
-        RETURNING id, label, system_prompt, created_by, created_at, is_active
+        INSERT INTO persona_versions (id, label, system_prompt, created_by, created_at, is_active)
+        VALUES ($1, $2, $3, $4, $5, $6)
         "#,
     )
+    .bind(id)
     .bind(body.label.trim())
-    .bind(body.system_prompt)
+    .bind(&body.system_prompt)
     .bind(admin.0.id)
+    .bind(now)
     .bind(activate)
+    .execute(&mut *tx)
+    .await?;
+
+    let row = sqlx::query_as::<_, PersonaVersion>(
+        r#"
+        SELECT id, label, system_prompt, created_by, created_at, is_active
+        FROM persona_versions WHERE id = $1
+        "#,
+    )
+    .bind(id)
     .fetch_one(&mut *tx)
     .await?;
 
     sqlx::query(
-        r#"INSERT INTO audit_logs (user_id, action, detail) VALUES ($1, 'persona.create', $2)"#,
+        r#"INSERT INTO audit_logs (id, user_id, action, detail) VALUES ($1, $2, 'persona.create', $3)"#,
     )
+    .bind(Uuid::new_v4())
     .bind(admin.0.id)
     .bind(serde_json::json!({ "id": row.id, "label": row.label, "activated": activate }))
     .execute(&mut *tx)
@@ -131,8 +145,9 @@ async fn activate_version(
     .ok_or_else(|| AppError::NotFound("persona version".into()))?;
 
     sqlx::query(
-        r#"INSERT INTO audit_logs (user_id, action, detail) VALUES ($1, 'persona.activate', $2)"#,
+        r#"INSERT INTO audit_logs (id, user_id, action, detail) VALUES ($1, $2, 'persona.activate', $3)"#,
     )
+    .bind(Uuid::new_v4())
     .bind(admin.0.id)
     .bind(serde_json::json!({ "id": row.id, "label": row.label }))
     .execute(&mut *tx)

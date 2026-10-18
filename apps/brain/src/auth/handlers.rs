@@ -125,7 +125,7 @@ async fn login(
     Json(body): Json<LoginRequest>,
 ) -> AppResult<Json<TokenPair>> {
     let row = sqlx::query_as::<_, (Uuid, String, String, Option<String>, String)>(
-        r#"SELECT id, email, role::text, display_name, password_hash FROM users WHERE email = $1"#,
+        r#"SELECT id, email, role, display_name, password_hash FROM users WHERE email = $1"#,
     )
     .bind(body.email.to_lowercase())
     .fetch_optional(&state.pool)
@@ -145,24 +145,27 @@ async fn refresh(
     Json(body): Json<RefreshRequest>,
 ) -> AppResult<Json<TokenPair>> {
     let hash = hash_token(&body.refresh_token);
+    let now = Utc::now();
     let row = sqlx::query_as::<_, (Uuid, Uuid, String, String, Option<String>)>(
         r#"
-        SELECT rt.id, u.id, u.email, u.role::text, u.display_name
+        SELECT rt.id, u.id, u.email, u.role, u.display_name
         FROM refresh_tokens rt
         JOIN users u ON u.id = rt.user_id
         WHERE rt.token_hash = $1
           AND rt.revoked_at IS NULL
-          AND rt.expires_at > now()
+          AND rt.expires_at > $2
         "#,
     )
     .bind(&hash)
+    .bind(now)
     .fetch_optional(&state.pool)
     .await?
     .ok_or(AppError::Unauthorized)?;
 
     let (_rt_id, user_id, email, role, display_name) = row;
-    sqlx::query("UPDATE refresh_tokens SET revoked_at = now() WHERE token_hash = $1")
+    sqlx::query("UPDATE refresh_tokens SET revoked_at = $2 WHERE token_hash = $1")
         .bind(&hash)
+        .bind(now)
         .execute(&state.pool)
         .await?;
 
@@ -174,13 +177,15 @@ async fn accept_invite(
     Json(body): Json<AcceptInviteRequest>,
 ) -> AppResult<(StatusCode, Json<TokenPair>)> {
     let token_hash = hash_token(&body.token);
+    let now = Utc::now();
     let invite = sqlx::query_as::<_, (Uuid, String, String)>(
         r#"
-        SELECT id, email, role::text FROM invites
-        WHERE token_hash = $1 AND accepted_at IS NULL AND expires_at > now()
+        SELECT id, email, role FROM invites
+        WHERE token_hash = $1 AND accepted_at IS NULL AND expires_at > $2
         "#,
     )
     .bind(&token_hash)
+    .bind(now)
     .fetch_optional(&state.pool)
     .await?
     .ok_or_else(|| AppError::BadRequest("invalid or expired invite".into()))?;
@@ -192,19 +197,20 @@ async fn accept_invite(
 
     let password_hash = hash_password(&body.password)?;
     let mut tx = state.pool.begin().await?;
+    let user_id = Uuid::new_v4();
 
-    let user_id: Uuid = sqlx::query_scalar(
+    sqlx::query(
         r#"
-        INSERT INTO users (email, password_hash, role, display_name)
-        VALUES ($1, $2, $3::user_role, $4)
-        RETURNING id
+        INSERT INTO users (id, email, password_hash, role, display_name)
+        VALUES ($1, $2, $3, $4, $5)
         "#,
     )
+    .bind(user_id)
     .bind(email.to_lowercase())
     .bind(&password_hash)
     .bind(&role)
     .bind(&body.display_name)
-    .fetch_one(&mut *tx)
+    .execute(&mut *tx)
     .await
     .map_err(|e| match e {
         sqlx::Error::Database(db) if db.constraint().is_some() => {
@@ -218,8 +224,9 @@ async fn accept_invite(
         .execute(&mut *tx)
         .await?;
 
-    sqlx::query("UPDATE invites SET accepted_at = now() WHERE id = $1")
+    sqlx::query("UPDATE invites SET accepted_at = $2 WHERE id = $1")
         .bind(invite_id)
+        .bind(now)
         .execute(&mut *tx)
         .await?;
 
@@ -248,7 +255,7 @@ async fn ws_ticket(
 
 async fn me(State(state): State<AppState>, user: AuthUser) -> AppResult<Json<UserPublic>> {
     let row = sqlx::query_as::<_, UserRow>(
-        r#"SELECT id, email, role::text as role, display_name FROM users WHERE id = $1"#,
+        r#"SELECT id, email, role, display_name FROM users WHERE id = $1"#,
     )
     .bind(user.id)
     .fetch_one(&state.pool)
@@ -281,10 +288,11 @@ async fn issue_pair(
 
     sqlx::query(
         r#"
-        INSERT INTO refresh_tokens (user_id, token_hash, expires_at)
-        VALUES ($1, $2, $3)
+        INSERT INTO refresh_tokens (id, user_id, token_hash, expires_at)
+        VALUES ($1, $2, $3, $4)
         "#,
     )
+    .bind(Uuid::new_v4())
     .bind(user_id)
     .bind(&refresh_hash)
     .bind(expires_at)
@@ -325,16 +333,17 @@ pub async fn bootstrap_superadmin(state: &AppState) -> anyhow::Result<()> {
     }
 
     let password_hash = hash_password(password)?;
-    let user_id: Uuid = sqlx::query_scalar(
+    let user_id = Uuid::new_v4();
+    sqlx::query(
         r#"
-        INSERT INTO users (email, password_hash, role, display_name)
-        VALUES ($1, $2, 'superadmin', 'Superadmin')
-        RETURNING id
+        INSERT INTO users (id, email, password_hash, role, display_name)
+        VALUES ($1, $2, $3, 'superadmin', 'Superadmin')
         "#,
     )
+    .bind(user_id)
     .bind(email.to_lowercase())
     .bind(password_hash)
-    .fetch_one(&state.pool)
+    .execute(&state.pool)
     .await?;
 
     sqlx::query("INSERT INTO user_profiles (user_id) VALUES ($1)")

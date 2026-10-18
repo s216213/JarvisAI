@@ -56,7 +56,7 @@ async fn get_profile(
 ) -> AppResult<Json<UserProfileView>> {
     let row = sqlx::query_as::<_, (Option<String>, serde_json::Value, Option<String>, Option<String>)>(
         r#"
-        SELECT u.display_name, COALESCE(p.preferences, '{}'::jsonb), p.response_style, u.display_name
+        SELECT u.display_name, COALESCE(p.preferences, '{}'), p.response_style, u.display_name
         FROM users u
         LEFT JOIN user_profiles p ON p.user_id = u.id
         WHERE u.id = $1
@@ -78,27 +78,34 @@ async fn update_profile(
     user: AuthUser,
     Json(body): Json<UpdateProfile>,
 ) -> AppResult<Json<UserProfileView>> {
+    let now = chrono::Utc::now();
     if let Some(name) = &body.display_name {
-        sqlx::query("UPDATE users SET display_name = $1, updated_at = now() WHERE id = $2")
+        sqlx::query("UPDATE users SET display_name = $1, updated_at = $3 WHERE id = $2")
             .bind(name)
             .bind(user.id)
+            .bind(now)
             .execute(&state.pool)
             .await?;
     }
 
+    let prefs = body
+        .preferences
+        .clone()
+        .unwrap_or_else(|| serde_json::json!({}));
     sqlx::query(
         r#"
-        INSERT INTO user_profiles (user_id, preferences, response_style)
-        VALUES ($1, COALESCE($2, '{}'::jsonb), $3)
+        INSERT INTO user_profiles (user_id, preferences, response_style, updated_at)
+        VALUES ($1, $2, $3, $4)
         ON CONFLICT (user_id) DO UPDATE SET
             preferences = COALESCE($2, user_profiles.preferences),
             response_style = COALESCE($3, user_profiles.response_style),
-            updated_at = now()
+            updated_at = $4
         "#,
     )
     .bind(user.id)
-    .bind(&body.preferences)
+    .bind(&prefs)
     .bind(&body.response_style)
+    .bind(now)
     .execute(&state.pool)
     .await?;
 
@@ -127,21 +134,35 @@ async fn upsert_fact(
     if body.key.trim().is_empty() {
         return Err(AppError::BadRequest("key required".into()));
     }
-    let fact = sqlx::query_as::<_, UserFact>(
+    let id = Uuid::new_v4();
+    let now = chrono::Utc::now();
+    sqlx::query(
         r#"
-        INSERT INTO user_facts (user_id, key, value, source_thread)
-        VALUES ($1, $2, $3, $4)
+        INSERT INTO user_facts (id, user_id, key, value, source_thread, updated_at)
+        VALUES ($1, $2, $3, $4, $5, $6)
         ON CONFLICT (user_id, key) DO UPDATE SET
             value = EXCLUDED.value,
             source_thread = COALESCE(EXCLUDED.source_thread, user_facts.source_thread),
-            updated_at = now()
-        RETURNING id, key, value, source_thread, updated_at
+            updated_at = EXCLUDED.updated_at
+        "#,
+    )
+    .bind(id)
+    .bind(user.id)
+    .bind(body.key.trim())
+    .bind(&body.value)
+    .bind(body.source_thread)
+    .bind(now)
+    .execute(&state.pool)
+    .await?;
+
+    let fact = sqlx::query_as::<_, UserFact>(
+        r#"
+        SELECT id, key, value, source_thread, updated_at
+        FROM user_facts WHERE user_id = $1 AND key = $2
         "#,
     )
     .bind(user.id)
     .bind(body.key.trim())
-    .bind(body.value)
-    .bind(body.source_thread)
     .fetch_one(&state.pool)
     .await?;
     Ok(Json(fact))
@@ -226,7 +247,7 @@ pub async fn maybe_update_summary(state: &AppState, thread_id: Uuid) -> AppResul
 
     let recent = sqlx::query_as::<_, (String, String)>(
         r#"
-        SELECT role::text, content FROM messages
+        SELECT role, content FROM messages
         WHERE thread_id = $1
         ORDER BY created_at DESC
         LIMIT 20
@@ -255,19 +276,21 @@ pub async fn maybe_update_summary(state: &AppState, thread_id: Uuid) -> AppResul
             .fetch_optional(&state.pool)
             .await?;
 
+    let now = chrono::Utc::now();
     sqlx::query(
         r#"
-        INSERT INTO thread_summaries (thread_id, summary, up_to_message_id)
-        VALUES ($1, $2, $3)
+        INSERT INTO thread_summaries (thread_id, summary, up_to_message_id, updated_at)
+        VALUES ($1, $2, $3, $4)
         ON CONFLICT (thread_id) DO UPDATE SET
             summary = EXCLUDED.summary,
             up_to_message_id = EXCLUDED.up_to_message_id,
-            updated_at = now()
+            updated_at = EXCLUDED.updated_at
         "#,
     )
     .bind(thread_id)
     .bind(summary)
     .bind(last_id)
+    .bind(now)
     .execute(&state.pool)
     .await?;
 
