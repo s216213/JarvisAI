@@ -22,7 +22,7 @@ services:
       context: ./apps/brain
       dockerfile: Dockerfile
     env_file:
-      - ./apps/brain/.env
+      - .env
     environment:
       DATABASE_URL: postgres://jarvis:jarvis@postgres:5432/jarvis
       LISTEN_ADDR: 0.0.0.0:8080
