@@ -50,6 +50,16 @@ jobs:
             ${{ steps.meta.outputs.sha_tag }}
             ${{ steps.meta.outputs.latest_tag }}
 
+      - name: Ensure remote dir + sync compose
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.OCI_HOST }}
+          username: ${{ secrets.OCI_USER }}
+          key: ${{ secrets.OCI_SSH_KEY }}
+          source: "docker-compose.yml"
+          target: "~/jarvis"
+          strip_components: 0
+
       - name: Deploy over SSH
         uses: appleboy/ssh-action@v1.2.0
         with:
@@ -59,6 +69,15 @@ jobs:
           script: |
             set -euo pipefail
             cd ~/jarvis
+            if [[ ! -f .env ]]; then
+              echo "Missing ~/jarvis/.env on the VM."
+              echo "Create it from apps/brain/.env.example (JWT_SECRET, LLM keys, bootstrap admin, CORS_ORIGINS)."
+              exit 1
+            fi
+            if [[ ! -f docker-compose.yml ]]; then
+              echo "Missing ~/jarvis/docker-compose.yml"
+              exit 1
+            fi
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
             export BRAIN_IMAGE='${{ steps.meta.outputs.sha_tag }}'
             docker compose pull brain

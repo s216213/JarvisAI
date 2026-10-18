@@ -5,31 +5,33 @@ Caddy runs **on the VM host** (`/etc/caddy/Caddyfile`). Docker only runs `postgr
 ## One-time VM setup
 
 1. Install Docker + Compose plugin.
-2. Install Caddy (system package / official repo).
-3. Create `~/jarvis` with:
-   - `docker-compose.yml`
-   - `apps/brain/.env` (secrets; never commit)
-4. Copy reverse-proxy config:
+2. Install Caddy on the host.
+3. Create deploy dir and secrets file:
    ```bash
-   sudo cp ~/jarvis/deploy/caddy/Caddyfile /etc/caddy/Caddyfile
-   # edit domain, then:
+   mkdir -p ~/jarvis
+   # copy apps/brain/.env.example → ~/jarvis/.env and fill secrets
+   nano ~/jarvis/.env
+   ```
+4. Host Caddy (edit domain first):
+   ```bash
+   sudo cp /path/to/repo/deploy/caddy/Caddyfile /etc/caddy/Caddyfile
    sudo systemctl enable --now caddy
    sudo systemctl reload caddy
    ```
-5. Open OCI Security List / NSG: **22**, **80**, **443** (not 8080 publicly).
+5. OCI Security List / NSG: **22**, **80**, **443** (not 8080 publicly).
+
+`docker-compose.yml` is synced automatically by GitHub Actions into `~/jarvis/`.
+
+## Required on VM before first deploy
+
+| Path | Purpose |
+|------|---------|
+| `~/jarvis/.env` | Brain secrets (`JWT_SECRET`, LLM keys, bootstrap admin, `CORS_ORIGINS`) |
+| `/etc/caddy/Caddyfile` | `reverse_proxy 127.0.0.1:8080` |
 
 ## GitHub Actions secrets
 
 - `OCI_HOST`, `OCI_USER`, `OCI_SSH_KEY`
-- Image: `ghcr.io/<owner>/jarvis-brain`
-
-Workflow builds only `apps/brain` and runs:
-
-```bash
-cd ~/jarvis
-docker compose pull brain
-docker compose up -d postgres brain
-```
 
 ## Local check on VM
 
