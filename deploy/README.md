@@ -1,14 +1,39 @@
-# OCI deploy notes
+# OCI deploy notes (system Caddy)
 
-1. On the VM, create `~/jarvis` with:
-   - `docker-compose.yml` (from repo root)
-   - `deploy/caddy/Caddyfile`
+Caddy runs **on the VM host** (`/etc/caddy/Caddyfile`). Docker only runs `postgres` + `brain`.
+
+## One-time VM setup
+
+1. Install Docker + Compose plugin.
+2. Install Caddy (system package / official repo).
+3. Create `~/jarvis` with:
+   - `docker-compose.yml`
    - `apps/brain/.env` (secrets; never commit)
+4. Copy reverse-proxy config:
+   ```bash
+   sudo cp ~/jarvis/deploy/caddy/Caddyfile /etc/caddy/Caddyfile
+   # edit domain, then:
+   sudo systemctl enable --now caddy
+   sudo systemctl reload caddy
+   ```
+5. Open OCI Security List / NSG: **22**, **80**, **443** (not 8080 publicly).
 
-2. Set `JARVIS_DOMAIN` for Caddy (or edit Caddyfile).
+## GitHub Actions secrets
 
-3. GitHub Actions secrets:
-   - `OCI_HOST`, `OCI_USER`, `OCI_SSH_KEY`
-   - Image pushes to GHCR as `ghcr.io/<owner>/jarvis-brain`
+- `OCI_HOST`, `OCI_USER`, `OCI_SSH_KEY`
+- Image: `ghcr.io/<owner>/jarvis-brain`
 
-4. Workflow only builds `apps/brain` Docker context (not the whole monorepo).
+Workflow builds only `apps/brain` and runs:
+
+```bash
+cd ~/jarvis
+docker compose pull brain
+docker compose up -d postgres brain
+```
+
+## Local check on VM
+
+```bash
+curl -s http://127.0.0.1:8080/health
+curl -s https://api.example.com/health
+```

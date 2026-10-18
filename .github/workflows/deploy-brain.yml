@@ -62,5 +62,5 @@ jobs:
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
             export BRAIN_IMAGE='${{ steps.meta.outputs.sha_tag }}'
             docker compose pull brain
-            docker compose up -d brain caddy postgres
+            docker compose up -d postgres brain
             docker image prune -f

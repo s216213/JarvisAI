@@ -45,9 +45,12 @@ pnpm dev
 
 ## OCI deploy
 
-1. Copy `docker-compose.yml`, `deploy/caddy`, and brain `.env` to the VM (`~/jarvis`).
-2. Set GitHub secrets: `OCI_HOST`, `OCI_USER`, `OCI_SSH_KEY`.
-3. Push to `main` under `apps/brain/**` to build/push GHCR and restart compose.
+1. Copy `docker-compose.yml` + brain `.env` to `~/jarvis` on the VM (Docker: `postgres` + `brain` only).
+2. Use **host Caddy**: copy `deploy/caddy/Caddyfile` → `/etc/caddy/Caddyfile`, set your domain, `systemctl reload caddy`.
+3. GitHub secrets: `OCI_HOST`, `OCI_USER`, `OCI_SSH_KEY`.
+4. Push to `main` under `apps/brain/**` → GHCR build + `docker compose up -d postgres brain`.
+
+See [deploy/README.md](deploy/README.md).
 
 ## Vercel
 

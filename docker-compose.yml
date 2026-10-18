@@ -14,6 +14,7 @@ services:
       retries: 10
     networks:
       - jarvis
+    restart: unless-stopped
 
   brain:
     image: ${BRAIN_IMAGE:-ghcr.io/OWNER/jarvis-brain:latest}
@@ -28,31 +29,15 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    expose:
-      - "8080"
-    networks:
-      - jarvis
-    restart: unless-stopped
-
-  caddy:
-    image: caddy:2-alpine
+    # Bound to loopback — system Caddy on the VM reverse-proxies here.
     ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./deploy/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
-    depends_on:
-      - brain
+      - "127.0.0.1:8080:8080"
     networks:
       - jarvis
     restart: unless-stopped
 
 volumes:
   pgdata:
-  caddy_data:
-  caddy_config:
 
 networks:
   jarvis:
